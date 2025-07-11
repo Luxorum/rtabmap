@@ -10,6 +10,8 @@ pwd=$(pwd)
 prefix=$pwd
 sysroot=iphoneos
 #sysroot=iphonesimulator
+# Number of parallel jobs for builds (use all logical CPUs)
+JOBS=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
 
 # openmp
 # based on https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/libomp.rb
@@ -38,8 +40,8 @@ cd boost-1.88.0
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DBOOST_INCOMPATIBLE_LIBRARIES="process;context;coroutine;fiber;fiber_numa;log_setup;log;cobalt" -DBOOST_IOSTREAMS_ENABLE_ZLIB=OFF -DBOOST_IOSTREAMS_ENABLE_BZIP2=OFF ..
-cmake --build . --config Release
-cmake --build . --config Release --target install
+cmake --build . --config Release --parallel $JOBS
+cmake --build . --config Release --parallel $JOBS --target install
 cd $pwd
 #rm -r boost-1.88.0-cmake.tar.gz boost-1.88.0
 fi
@@ -57,8 +59,8 @@ cd eigen-3.4.0
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix ..
-cmake --build . --config Release
-cmake --build . --config Release --target install
+cmake --build . --config Release --parallel $JOBS
+cmake --build . --config Release --parallel $JOBS --target install
 cd $pwd
 #rm -r 3.4.0.tar.gz eigen-3.4.0
 fi
@@ -69,7 +71,7 @@ then
 if [ ! -e lz4 ]
 then
   echo "wget lz4..."
-  git clone https://github.com/lz4/lz4.git -b v1.10.0
+  git clone --depth 1 https://github.com/lz4/lz4.git -b v1.10.0
 fi
 cd lz4
 if [ ! -e LZ4Config.cmake.in ]
@@ -83,8 +85,8 @@ fi
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 #rm -r lz4
 fi
@@ -95,7 +97,7 @@ then
 if [ ! -e flann ]
 then
   echo "wget flann..."
-  git clone https://github.com/flann-lib/flann.git -b 1.9.2
+  git clone --depth 1 https://github.com/flann-lib/flann.git -b 1.9.2
 fi
 cd flann
 if [ ! -e flann_ios_lz4.patch ]
@@ -106,8 +108,8 @@ fi
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_MATLAB_BINDINGS=OFF -DBUILD_C_BINDINGS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DBUILD_DOC=OFF -DUSE_OPENMP=OFF -DLZ4_DIR=$prefix/lib/lz4  ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 #rm -r flann
 fi
@@ -117,7 +119,7 @@ if [ ! -e $prefix/include/gtsam ]
 then
 if [ ! -e gtsam ]
 then
-  git clone https://github.com/borglab/gtsam.git -b 4.2
+  git clone --depth 1 https://github.com/borglab/gtsam.git -b 4.2
 fi
 cd gtsam
 # patch
@@ -129,8 +131,8 @@ fi
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DMETIS_SHARED=OFF -DGTSAM_BUILD_STATIC_LIBRARY=ON -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF -DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_WRAP_SERIALIZATION=OFF -DGTSAM_BUILD_WRAP=OFF -DGTSAM_INSTALL_CPPUNITLITE=OFF -DCMAKE_FIND_ROOT_PATH=$prefix ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 #rm -rf gtsam
 fi
@@ -140,14 +142,14 @@ if [ ! -e $prefix/include/suitesparse/SuiteSparse_config.h ]
 then
 if [ ! -e SuiteSparse ]
 then
-  git clone https://github.com/DrTimothyAldenDavis/SuiteSparse.git -b v7.6.1
+  git clone --depth 1 https://github.com/DrTimothyAldenDavis/SuiteSparse.git -b v7.6.1
 fi
 cd SuiteSparse
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DCMAKE_FIND_ROOT_PATH=$prefix -DSUITESPARSE_USE_OPENMP=OFF -DSUITESPARSE_ENABLE_PROJECTS="cholmod;cxsparse;spqr"  ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 fi
 
@@ -156,7 +158,7 @@ if [ ! -e $prefix/include/g2o ]
 then
 if [ ! -e g2o ]
 then
-  git clone https://github.com/RainerKuemmerle/g2o.git -b 20241228_git
+  git clone --depth 1 https://github.com/RainerKuemmerle/g2o.git -b 20241228_git
 fi
 cd g2o
 # patch
@@ -169,8 +171,8 @@ fi
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DBUILD_LGPL_SHARED_LIBS=OFF -DG2O_BUILD_APPS=OFF -DG2O_BUILD_EXAMPLES=OFF -DCMAKE_FIND_ROOT_PATH=$prefix ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 #rm -rf g2o
 fi
@@ -180,9 +182,8 @@ if [ ! -e $prefix/lib/vtk.framework ]
 then
 if [ ! -e VTK ]
 then
-  git clone https://github.com/Kitware/VTK.git
+  git clone --depth 1 https://github.com/Kitware/VTK.git -b v9.5.0.rc1
   cd VTK
-  git checkout tags/v9.5.0.rc1
 else
   cd VTK
 fi
@@ -190,7 +191,7 @@ mkdir -p build
 cd build
 cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_FRAMEWORK_INSTALL_PREFIX=$prefix/lib -DIOS_DEVICE_ARCHITECTURES="arm64" -DIOS_SIMULATOR_ARCHITECTURES="" -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DVTK_IOS_BUILD=ON -DModule_vtkFiltersModeling=ON ..
 # For iphonesimulator: add -DIOS_DEVICE_ARCHITECTURES=""
-cmake --build . --config Release
+cmake --build . --config Release --parallel $JOBS
 cd $pwd
 #rm -rf VTK
 fi
@@ -202,9 +203,8 @@ if [ ! -e $prefix/include/pcl-1.15 ]
 then
 if [ ! -e pcl ]
 then
-  git clone https://github.com/PointCloudLibrary/pcl.git
+  git clone --depth 1 --branch pcl-1.15.0 https://github.com/PointCloudLibrary/pcl.git
   cd pcl
-  git checkout tags/pcl-1.15.0
 else
   cd pcl
 fi
@@ -217,8 +217,8 @@ fi
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DBUILD_apps=OFF -DBUILD_examples=OFF -DBUILD_tools=OFF -DBUILD_visualization=OFF -DBUILD_tracking=OFF -DBUILD_people=OFF -DBUILD_recognition=OFF -DBUILD_global_tests=OFF -DWITH_QT=OFF -DWITH_OPENGL=OFF -DWITH_OPENMP=OFF -DWITH_VTK=ON -DPCL_FLANN_REQUIRED_TYPE=STATIC -DPCL_SHARED_LIBS=OFF -DPCL_ENABLE_SSE=OFF -DCMAKE_FIND_ROOT_PATH=$prefix ..
-cmake --build . --config Release
-cmake --build . --config Release --target install
+cmake --build . --config Release --parallel $JOBS
+cmake --build . --config Release --parallel $JOBS --target install
 cd $pwd
 #rm -rf pcl
 fi
@@ -228,19 +228,19 @@ if [ ! -e $prefix/include/opencv4 ]
 then
 if [ ! -e opencv_contrib ]
 then
-  git clone https://github.com/opencv/opencv_contrib.git -b 4.11.0
+  git clone --depth 1 https://github.com/opencv/opencv_contrib.git -b 4.11.0
 fi
 cd $pwd
 if [ ! -e opencv ]
 then
-  git clone https://github.com/opencv/opencv.git -b 4.11.0
+  git clone --depth 1 https://github.com/opencv/opencv.git -b 4.11.0
 fi
 cd opencv
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DOPENCV_EXTRA_MODULES_PATH=$prefix/opencv_contrib/modules -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DWITH_CUDA=OFF -DWITH_WEBP=OFF -DWITH_OPENEXR=OFF -DBUILD_opencv_apps=OFF -DBUILD_opencv_xobjdetect=OFF -DBUILD_opencv_stereo=OFF -DOPENCV_ENABLE_NONFREE=ON ..
-cmake --build . --config Release
-cmake --build . --config Release --target install
+cmake --build . --config Release --parallel $JOBS
+cmake --build . --config Release --parallel $JOBS --target install
 cd $pwd
 #rm -rf opencv opencv_contrib
 fi
@@ -251,7 +251,7 @@ if [ ! -e $prefix/include/laszip ]
 then
 if [ ! -e LASzip ]
 then
-  git clone https://github.com/LASzip/LASzip.git -b 2.0.1
+  git clone --depth 1 https://github.com/LASzip/LASzip.git -b 2.0.1
 fi
 cd LASzip
 sed -i '' 's/cmake_minimum_required(VERSION 2.6.0)/cmake_minimum_required(VERSION 3.5)/g' CMakeLists.txt
@@ -259,8 +259,8 @@ sed -i '' 's/add_subdirectory(tools)/#add_subdirectory(tools)/g' CMakeLists.txt
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DCMAKE_FIND_ROOT_PATH=$prefix -DBUILD_STATIC=ON ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 fi
 
@@ -269,7 +269,7 @@ if [ ! -e $prefix/include/liblas ]
 then
 if [ ! -e libLAS ]
 then
-  git clone https://github.com/libLAS/libLAS.git
+  git clone --depth 1 https://github.com/libLAS/libLAS.git
 fi
 cd libLAS
 sed -i '' 's/cmake_minimum_required(VERSION 2.8.11)/cmake_minimum_required(VERSION 3.5)/g' CMakeLists.txt
@@ -277,17 +277,17 @@ sed -i '' 's/SHARED/STATIC/g' src/CMakeLists.txt
 mkdir -p build
 cd build
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DCMAKE_FIND_ROOT_PATH=$prefix -DWITH_UTILITIES=OFF -DWITH_TESTS=OFF -DWITH_GEOTIFF=OFF -DWITH_LASZIP=ON -DWITH_STATIC_LASZIP=ON ..
-cmake --build . --config Release -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
-cmake --build . --config Release --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
+cmake --build . --config Release --parallel $JOBS --target install -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGN_ENTITLEMENTS=""  CODE_SIGNING_ALLOWED="NO"
 cd $pwd
 fi
 
 mkdir -p rtabmap
 cd rtabmap
 cmake -DANDROID_PREBUILD=ON ../../../../..
-cmake --build . --config Release
+cmake --build . --config Release --parallel $JOBS
 mkdir -p ios
 cd ios
 cmake -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=$sysroot -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_INSTALL_PREFIX=$prefix -DCMAKE_FIND_ROOT_PATH=$prefix -DWITH_QT=OFF -DBUILD_APP=OFF -DBUILD_TOOLS=OFF -DWITH_TORO=OFF -DWITH_VERTIGO=OFF -DWITH_MADGWICK=OFF -DWITH_ORB_OCTREE=ON  -DBUILD_EXAMPLES=OFF -DWITH_LIBLAS=ON ../../../../../..
-cmake --build . --config Release
-cmake --build . --config Release --target install
+cmake --build . --config Release --parallel $JOBS
+cmake --build . --config Release --parallel $JOBS --target install
