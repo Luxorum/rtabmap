@@ -9,6 +9,7 @@ import GLKit
 import ARKit
 import Zip
 import StoreKit
+import Foundation
 
 extension Array {
     func size() -> Int {
@@ -103,7 +104,11 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     private var mLastTimeHudShown: DispatchTime = .now()
     private var mMenuOpened: Bool = false
     private var lowMemoryWarningShown: Bool = false
-    static var previewImages: [String: UIImage] = [:]
+    static let previewImageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 20
+        return cache
+    }()
     private var measuringMode: Int = 0
     private var visualizationType: Int = 0 // 0=Cloud, 1=Mesh, 2=Texture Mesh
     
@@ -154,8 +159,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         }
         self.toastLabel.text = message
         self.toastLabel.isHidden = false
-        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + seconds) {
-            self.toastLabel.isHidden = true
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + seconds) { [weak self] in
+            self?.toastLabel.isHidden = true
         }
     }
     
@@ -168,7 +173,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             updateState(state: self.mState)
             
             mLastTimeHudShown = DispatchTime.now()
-            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 5) {
+            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 5) { [weak self] in
+                guard let self = self else { return }
                 if(DispatchTime.now() <= self.mLastTimeHudShown + 4.9) {
                     return
                 }
@@ -279,13 +285,14 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         orthoDistanceSlider.setValue(80, animated: false)
         orthoGridSlider.setValue(90, animated: false)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.updateState(state: self.mState)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.updateState(state: self?.mState ?? .STATE_WELCOME)
         }
     }
 
     func progressStatusUpdate() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
             if self.mState == .STATE_PROCESSING && self.statusShown
             {
                 let availableMem = self.getAvailableMemory()
@@ -299,12 +306,13 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     }
     
     func progressUpdated(_ rtabmap: RTABMap, count: Int, max: Int) {
-        DispatchQueue.main.async {
-            self.progressView?.setProgress(Float(count)/Float(max), animated: true)
+        DispatchQueue.main.async { [weak self] in
+            self?.progressView?.setProgress(Float(count)/Float(max), animated: true)
         }
     }
     func initEventReceived(_ rtabmap: RTABMap, status: Int, msg: String) {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             var optimizedMeshDetected = 0
 
             if(msg == "Loading optimized cloud...done!")
@@ -393,7 +401,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         
         let formattedDate = Date().getFormattedDate(format: "HH:mm:ss.SSS")
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             
             if(self.mMapNodes>0 && previousNodes==0 && self.mState != .STATE_MAPPING)
             {
@@ -535,7 +544,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     func cameraInfoEventReceived(_ rtabmap: RTABMap, type: Int, key: String, value: String) {
         if(self.debugShown && key == "UpstreamRelocationFiltered")
         {
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.dismiss(animated: true)
                 self.showToast(message: "ARKit re-localization filtered because an acceleration of \(value) has been detected, which is over current threshold set in the settings.", seconds: 3)
             }
@@ -544,6 +554,11 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     
     func getAvailableMemory() -> Int {
         return os_proc_available_memory()/(1024*1024)
+    }
+
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        ViewController.previewImageCache.removeAllObjects()
     }
     
     @objc func appMovedToBackground() {
@@ -643,10 +658,10 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                 }
             
             case .notDetermined: // The user has not yet been asked for camera access.
-                AVCaptureDevice.requestAccess(for: .video) { granted in
+                AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                     if granted {
-                        DispatchQueue.main.async {
-                            self.startCamera()
+                        DispatchQueue.main.async { [weak self] in
+                            self?.startCamera()
                         }
                     }
                 }
@@ -1204,8 +1219,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         }
         
         if !status.isEmpty {
-            DispatchQueue.main.async {
-                self.showToast(message: status, seconds: 2)
+            DispatchQueue.main.async { [weak self] in
+                self?.showToast(message: status, seconds: 2)
             }
         }
     }
@@ -1221,7 +1236,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             errorWithInfo.localizedRecoverySuggestion
         ]
         let errorMessage = messages.compactMap({ $0 }).joined(separator: "\n")
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             // Present an alert informing about the error that has occurred.
             let alertController = UIAlertController(title: "The AR session failed.", message: errorMessage, preferredStyle: .alert)
             let restartAction = UIAlertAction(title: "Restart Session", style: .default) { _ in
@@ -1311,9 +1327,16 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        
+
         // The screen shouldn't dim during AR experiences.
         UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+
+        UIApplication.shared.isIdleTimerDisabled = false
+        NotificationCenter.default.removeObserver(self)
     }
     
     var statusBarOrientation: UIInterfaceOrientation? {
@@ -1330,6 +1353,7 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
     }
         
     deinit {
+        NotificationCenter.default.removeObserver(self)
         EAGLContext.setCurrent(context)
         rtabmap = nil
         context = nil
@@ -1474,8 +1498,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         
             
             if self.isPaused {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.view.setNeedsDisplay()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.view.setNeedsDisplay()
                 }
             }
         }
@@ -1487,8 +1511,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             resetNoTouchTimer(!mHudVisible)
             
             if self.isPaused {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.view.setNeedsDisplay()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.view.setNeedsDisplay()
                 }
             }
         }
@@ -1573,8 +1597,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         let bgColor = defaults.float(forKey: "BackgroundColor");
         rtabmap!.setBackgroundColor(gray: bgColor);
         
-        DispatchQueue.main.async {
-            self.statusLabel.textColor = bgColor>=0.6 ? UIColor(white: 0.0, alpha: 1) : UIColor(white: 1.0, alpha: 1)
+        DispatchQueue.main.async { [weak self] in
+            self?.statusLabel.textColor = bgColor>=0.6 ? UIColor(white: 0.0, alpha: 1) : UIColor(white: 1.0, alpha: 1)
         }
     
         rtabmap!.setClusterRatio(value: defaults.float(forKey: "NoiseFilteringRatio"));
@@ -1669,9 +1693,10 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                     var indicator: UIActivityIndicatorView?
                     
                     let alertView = UIAlertController(title: "Recovering", message: "Please wait while recovering data...", preferredStyle: .alert)
-                    let alertViewActionCancel = UIAlertAction(title: "Cancel", style: .cancel) {
+                    let alertViewActionCancel = UIAlertAction(title: "Cancel", style: .cancel) { [weak self]
                         (UIAlertAction) -> Void in
-                        self.dismiss(animated: true, completion: {
+                        self?.dismiss(animated: true, completion: { [weak self] in
+                            guard let self = self else { return }
                             self.progressView = nil
                             
                             indicator = UIActivityIndicatorView(style: .large)
@@ -1699,11 +1724,12 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                         alertView.view.addSubview(self.progressView!)
                         
                         var success : Bool = false
-                        DispatchQueue.background(background: {
-                            
+                        DispatchQueue.background(background: { [weak self] in
+                            guard let self = self else { return }
                             success = self.rtabmap!.recover(from: tmpDatabase.path, to: outputDbPath)
-                            
-                        }, completion:{
+
+                        }, completion:{ [weak self] in
+                            guard let self = self else { return }
                             if(indicator != nil)
                             {
                                 indicator!.stopAnimating()
@@ -1711,7 +1737,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                             }
                             if self.progressView != nil
                             {
-                                self.dismiss(animated: self.openedDatabasePath == nil, completion: {
+                                self.dismiss(animated: self.openedDatabasePath == nil, completion: { [weak self] in
+                                    guard let self = self else { return }
                                     if(success)
                                     {
                                         let alertSaved = UIAlertController(title: "Database saved!", message: String(format: "Database \"%@\" successfully recovered!", fileName), preferredStyle: .alert)
@@ -1851,10 +1878,10 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         let previousState = mState;
         updateState(state: .STATE_PROCESSING);
         
-        DispatchQueue.background(background: {
-            self.rtabmap?.save(databasePath: filePath); // save
-        }, completion:{
-            // main thread
+        DispatchQueue.background(background: { [weak self] in
+            self?.rtabmap?.save(databasePath: filePath); // save
+        }, completion:{ [weak self] in
+            guard let self = self else { return }
             indicator.stopAnimating()
             indicator.removeFromSuperview()
             
@@ -1898,10 +1925,11 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
         var indicator: UIActivityIndicatorView?
         
         let alertView = UIAlertController(title: "Assembling", message: "Please wait while assembling data...", preferredStyle: .alert)
-        alertView.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
-            self.dismiss(animated: true, completion: {
+        alertView.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { [weak self] _ in
+            self?.dismiss(animated: true, completion: { [weak self] in
+                guard let self = self else { return }
                 self.progressView = nil
-                
+
                 indicator = UIActivityIndicatorView(style: .large)
                 indicator?.frame = CGRect(x: 0.0, y: 0.0, width: 60.0, height: 60.0)
                 indicator?.center = self.view.center
@@ -1912,7 +1940,7 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                 
                 self.rtabmap!.cancelProcessing()
             })
-            
+
         }))
 	
         let previousState = mState
@@ -1931,8 +1959,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             self.progressStatusUpdate() // This will update memory usage during post processing
             
             var success : Bool = false
-            DispatchQueue.background(background: {
-                
+            DispatchQueue.background(background: { [weak self] in
+                guard let self = self else { return }
                 success = self.rtabmap!.exportMesh(
                     cloudVoxelSize: cloudVoxelSize,
                     regenerateCloud: regenerateCloud,
@@ -1951,8 +1979,9 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                     optimizedMinTextureClusterSize: minTextureClusterSize,
                     textureVertexColorPolicy: textureVertexColorPolicy,
                     blockRendering: blockRendering)
-                
-            }, completion:{
+
+            }, completion:{ [weak self] in
+                guard let self = self else { return }
                 if(indicator != nil)
                 {
                     indicator!.stopAnimating()
@@ -2046,9 +2075,11 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             self.progressStatusUpdate() // This will update memory usage during post processing
             
             var loopDetected : Int = -1
-            DispatchQueue.background(background: {
+            DispatchQueue.background(background: { [weak self] in
+                guard let self = self else { return }
                 loopDetected = self.rtabmap!.postProcessing(approach: approach);
-            }, completion:{
+            }, completion:{ [weak self] in
+                guard let self = self else { return }
                 // main thread
                 if self.progressView != nil
                 {
@@ -2187,10 +2218,12 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
 
         updateState(state: .STATE_PROCESSING);
         var status = 0
-        DispatchQueue.background(background: {
+        DispatchQueue.background(background: { [weak self] in
+            guard let self = self else { return }
             self.optimizedGraphShown = true // Always reset to true when opening a database
             status = self.rtabmap!.openDatabase(databasePath: self.openedDatabasePath!.path, databaseInMemory: true, optimize: false, clearDatabase: false)
-        }, completion:{
+        }, completion:{ [weak self] in
+            guard let self = self else { return }
             // main thread
             if(status == -1) {
                 self.dismiss(animated: true)
@@ -2389,7 +2422,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
             
             var success : Bool = false
             var zipFileUrl : URL!
-            DispatchQueue.background(background: {
+            DispatchQueue.background(background: { [weak self] in
+                guard let self = self else { return }
                 print("Exporting to directory \(exportDir.path) with name \(fileName)")
                 if(self.rtabmap!.writeExportedMesh(directory: exportDir.path, name: fileName))
                 {
@@ -2433,7 +2467,8 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                     }
                 }
                 
-            }, completion:{
+            }, completion:{ [weak self] in
+                guard let self = self else { return }
                 if self.progressView != nil
                 {
                     self.dismiss(animated: true)
@@ -2441,17 +2476,16 @@ class ViewController: GLKViewController, ARSessionDelegate, RTABMapObserver, UIP
                 if(success)
                 {
                     let alertShare = UIAlertController(title: "Mesh/Cloud Saved!", message: "\(fileName+(isLAZ ? ".laz" : ".zip")) (\(zipFileUrl.fileSizeString) successfully exported in Documents of RTAB-Map! Share it?", preferredStyle: .alert)
-                    let alertActionYes = UIAlertAction(title: "Yes", style: .default) {
+                    let alertActionYes = UIAlertAction(title: "Yes", style: .default) { [weak self]
                         (UIAlertAction) -> Void in
-                        self.shareFile(zipFileUrl)
+                        self?.shareFile(zipFileUrl)
                     }
                     alertShare.addAction(alertActionYes)
-                    let alertActionNo = UIAlertAction(title: "No", style: .cancel) {
-                        (UIAlertAction) -> Void in
-                       
+                    let alertActionNo = UIAlertAction(title: "No", style: .cancel) { _ in
+
                     }
                     alertShare.addAction(alertActionNo)
-                    
+
                     self.present(alertShare, animated: true, completion: nil)
                 }
                 else
@@ -2609,7 +2643,8 @@ extension ViewController: GLKViewControllerDelegate {
 
         let value = rtabmap?.render()
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             if(value != 0 && self.progressView != nil)
             {
                 print("Render dismissing")
