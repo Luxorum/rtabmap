@@ -30,8 +30,9 @@
 
 
 import UIKit
+import Foundation
 
-protocol DatabaseViewDelegate: class {
+protocol DatabaseViewDelegate: AnyObject {
     func databaseShared(databaseURL: URL)
     func databaseRenamed(databaseURL: URL)
     func databaseDeleted(databaseURL: URL)
@@ -44,7 +45,7 @@ class DatabaseView: UIView {
   private var valueObservation: NSKeyValueObservation!
   private var textLabel: UILabel!
   private var databaseURL: URL!
-  public var delegate: DatabaseViewDelegate!
+  weak var delegate: DatabaseViewDelegate?
   
   required init?(coder aDecoder: NSCoder) {
     super.init(coder: aDecoder)
@@ -55,7 +56,7 @@ class DatabaseView: UIView {
         super.init(frame: frame)
         self.databaseURL = databaseURL
         commonInit(databasePath: databaseURL.path)
-        if let image = ViewController.previewImages[databaseURL.path]
+        if let image = ViewController.previewImageCache.object(forKey: databaseURL.path as NSString)
         {
             self.coverImageView.image = image
         }
@@ -65,7 +66,7 @@ class DatabaseView: UIView {
                 let downloadedImage = getPreviewImage(databasePath: databaseURL.path)
                 DispatchQueue.main.async {
                     self.coverImageView.image = downloadedImage
-                    ViewController.previewImages[databaseURL.path] = downloadedImage
+                    ViewController.previewImageCache.setObject(downloadedImage, forKey: databaseURL.path as NSString)
                 }
             }
         }
