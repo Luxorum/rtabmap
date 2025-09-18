@@ -43,6 +43,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <set>
 #include <queue>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+#include <ctime>
 
 #include <rtabmap/core/optimizer/OptimizerTORO.h>
 #include <rtabmap/core/optimizer/OptimizerG2O.h>
@@ -51,12 +55,52 @@ namespace rtabmap {
 
 namespace graph {
 
+namespace {
+
+std::string stampToUtcString(double stamp)
+{
+        double secondsDouble = std::floor(stamp);
+        double fractional = stamp - secondsDouble;
+        if(fractional < 0.0)
+        {
+                fractional += 1.0;
+                secondsDouble -= 1.0;
+        }
+
+        std::time_t rawTime = static_cast<std::time_t>(secondsDouble);
+        int milliseconds = static_cast<int>(uRound(fractional * 1000.0));
+        if(milliseconds >= 1000)
+        {
+                milliseconds -= 1000;
+                ++rawTime;
+        }
+
+        std::tm tmStruct;
+#ifdef _MSC_VER
+        gmtime_s(&tmStruct, &rawTime);
+#else
+        gmtime_r(&rawTime, &tmStruct);
+#endif
+
+        char timeBuffer[32];
+        if(std::strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%dT%H:%M:%S", &tmStruct) == 0)
+        {
+                return uNumber2Str(stamp);
+        }
+
+        std::ostringstream oss;
+        oss << timeBuffer << "." << std::setw(3) << std::setfill('0') << milliseconds << "Z";
+        return oss.str();
+}
+
+} // namespace
+
 bool exportPoses(
 		const std::string & filePath,
 		int format, // 0=Raw, 1=RGBD-SLAM motion capture (10=without change of coordinate frame, 11=10+ID), 2=KITTI, 3=TORO, 4=g2o
 		const std::map<int, Transform> & poses,
-		const std::multimap<int, Link> & constraints, // required for formats 3 and 4
-		const std::map<int, double> & stamps, // required for format 1, 10 and 11
+               const std::multimap<int, Link> & constraints, // required for formats 3 and 4
+               const std::map<int, double> & stamps, // required for formats 1, 10, 11 and 12
 		const ParametersMap & parameters) // optional for formats 3 and 4
 {
 	UDEBUG("%s", filePath.c_str());
@@ -79,26 +123,86 @@ bool exportPoses(
 		OptimizerG2O g2o(parameters);
 		return g2o.saveGraph(tmpPath, poses, constraints);
 	}
-	else
-	{
-		if(UFile::getExtension(tmpPath).empty())
-		{
-			tmpPath+=".txt";
-		}
+        else
+        {
+                if(UFile::getExtension(tmpPath).empty())
+                {
+                        if(format == 12)
+                        {
+                                tmpPath+=".json";
+                        }
+                        else
+                        {
+                                tmpPath+=".txt";
+                        }
+                }
 
-		if(format == 1 || format == 10 || format == 11)
-		{
-			if(stamps.size() != poses.size())
-			{
+                if(format == 1 || format == 10 || format == 11)
+                {
+                        if(stamps.size() != poses.size())
+                        {
 				UERROR("When exporting poses to format 1 (RGBD-SLAM), stamps and poses maps should have the same size! stamps=%d poses=%d",
 						(int)stamps.size(), (int)poses.size());
 				return false;
 			}
 		}
 
-		FILE* fout = 0;
+                if(format == 12)
+                {
+                        if(stamps.size() != poses.size())
+                        {
+                                UERROR("When exporting poses to format 12 (JSON), stamps and poses maps should have the same size! stamps=%d poses=%d",
+                                                (int)stamps.size(), (int)poses.size());
+                                return false;
+                        }
+
+                        std::ofstream fout(tmpPath.c_str());
+                        if(!fout.good())
+                        {
+                                UERROR("Could not open file %s for writing.", tmpPath.c_str());
+                                return false;
+                        }
+
+                        std::list<std::pair<int, Transform> > posesList;
+                        for(std::map<int, Transform>::const_iterator iter=poses.lower_bound(0); iter!=poses.end(); ++iter)
+                        {
+                                posesList.push_back(*iter);
+                        }
+
+                        fout << "{\n  \"cameraPositions\": {";
+                        fout << std::setprecision(6) << std::fixed;
+
+                        bool firstEntry = true;
+                        for(std::list<std::pair<int, Transform> >::const_iterator iter=posesList.begin(); iter!=posesList.end(); ++iter)
+                        {
+                                UASSERT(uContains(stamps, iter->first));
+                                if(!firstEntry)
+                                {
+                                        fout << ",";
+                                }
+                                fout << "\n    \"" << stampToUtcString(stamps.at(iter->first)) << "\": {";
+                                fout << "\"positionX\": " << iter->second.x() << ", ";
+                                fout << "\"positionY\": " << iter->second.y() << ", ";
+                                fout << "\"positionZ\": " << iter->second.z() << "}";
+                                firstEntry = false;
+                        }
+
+                        if(firstEntry)
+                        {
+                                fout << "}";
+                        }
+                        else
+                        {
+                                fout << "\n  }";
+                        }
+                        fout << "\n}\n";
+                        fout.close();
+                        return true;
+                }
+
+                FILE* fout = 0;
 #ifdef _MSC_VER
-		fopen_s(&fout, tmpPath.c_str(), "w");
+                fopen_s(&fout, tmpPath.c_str(), "w");
 #else
 		fout = fopen(tmpPath.c_str(), "w");
 #endif

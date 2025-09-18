@@ -117,7 +117,8 @@ void showUsage()
 			"                              1=RGBD-SLAM (in motion capture coordinate frame)\n"
 			"                              2=KITTI (same as raw but in optical frame)\n"
 			"                              3=TORO\n"
-			"                              4=g2o\n"
+                       "                              4=g2o\n"
+                       "                              12=JSON (UTC stamp to XYZ)\n"
 			"                              10=RGBD-SLAM in ROS coordinate frame (stamp x y z qx qy qz qw)\n"
 			"                              11=RGBD-SLAM in ROS coordinate frame + ID (stamp x y z qx qy qz qw id)\n"
 			"    --gps #               Export GPS values of the GPS frame in world coordinates. Formats:\n"
@@ -1804,7 +1805,7 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-		std::string posesExt = (exportPosesFormat==3?"toro":exportPosesFormat==4?"g2o":"txt");
+		std::string posesExt = (exportPosesFormat==3?"toro":exportPosesFormat==4?"g2o":exportPosesFormat==12?"json":"txt");
 		if(exportPoses)
 		{
 			std::string outputPath=outputDirectory+"/"+baseName+"_poses." + posesExt;

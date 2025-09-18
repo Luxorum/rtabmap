@@ -49,6 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/util3d_filtering.h>
 #include <rtabmap/core/util3d_surface.h>
 #include <rtabmap/core/Graph.h>
+#include <rtabmap/core/Link.h>
 #include <rtabmap/utilite/UEventsManager.h>
 #include <rtabmap/utilite/UStl.h>
 #include <rtabmap/utilite/UDirectory.h>
@@ -3378,7 +3379,48 @@ bool RTABMapApp::exportMesh(
 
 	exporting_ = true;
 
-	bool success = false;
+        bool success = false;
+
+        std::map<int, rtabmap::Transform> cameraPoses;
+        std::map<int, double> cameraStamps;
+        if(rtabmap_ && rtabmap_->getMemory())
+        {
+                std::map<int, rtabmap::Transform> poses = rtabmap_->getLocalOptimizedPoses();
+                if(poses.empty())
+                {
+                        std::multimap<int, rtabmap::Link> tmpLinks;
+                        rtabmap_->getGraph(poses, tmpLinks, true, true);
+                }
+                for(std::map<int, rtabmap::Transform>::const_iterator iter=poses.lower_bound(0); iter!=poses.end(); ++iter)
+                {
+                        cameraPoses.insert(*iter);
+                        rtabmap::Transform odomPose, groundTruth;
+                        int mapId = 0;
+                        int weight = 0;
+                        std::string label;
+                        double stamp = 0.0;
+                        std::vector<float> velocity;
+                        rtabmap::GPS gps;
+                        rtabmap::EnvSensors sensors;
+                        bool infoFound = rtabmap_->getMemory()->getNodeInfo(
+                                        iter->first,
+                                        odomPose,
+                                        mapId,
+                                        weight,
+                                        label,
+                                        stamp,
+                                        groundTruth,
+                                        velocity,
+                                        gps,
+                                        sensors,
+                                        true);
+                        if(!infoFound)
+                        {
+                                UWARN("Failed to get node info for pose %d when exporting camera positions.", iter->first);
+                        }
+                        cameraStamps.insert(std::make_pair(iter->first, stamp));
+                }
+        }
 
 	try
 	{
@@ -4413,9 +4455,29 @@ bool RTABMapApp::writeExportedMesh(const std::string & directory, const std::str
 				UERROR("Failed saving obj to %s!", filePath.c_str());
 			}
 		}
-	}
-	exporting_ = false;
-	return success;
+        }
+
+        if(!cameraPoses.empty())
+        {
+                if(cameraStamps.size() != cameraPoses.size())
+                {
+                        UWARN("Skipping camera position export because %d pose stamps were found for %d poses.", (int)cameraStamps.size(), (int)cameraPoses.size());
+                }
+                else
+                {
+                        std::string jsonPath = directory + UDirectory::separator() + name + ".json";
+                        if(rtabmap::graph::exportPoses(jsonPath, 12, cameraPoses, std::multimap<int, rtabmap::Link>(), cameraStamps, rtabmap_->getParameters()))
+                        {
+                                LOGI("Saved camera positions to %s!", jsonPath.c_str());
+                        }
+                        else
+                        {
+                                UERROR("Failed saving camera positions to %s!", jsonPath.c_str());
+                        }
+                }
+        }
+        exporting_ = false;
+        return success;
 }
 
 int RTABMapApp::postProcessing(int approach)

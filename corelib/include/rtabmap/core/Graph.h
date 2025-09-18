@@ -47,11 +47,11 @@ namespace graph {
 ////////////////////////////////////////////
 
 bool RTABMAP_CORE_EXPORT exportPoses(
-		const std::string & filePath,
-		int format, // 0=Raw (*.txt), 1=RGBD-SLAM motion capture (*.txt) (10=without change of coordinate frame, 11=10+ID), 2=KITTI (*.txt), 3=TORO (*.graph), 4=g2o (*.g2o)
+               const std::string & filePath,
+               int format, // 0=Raw (*.txt), 1=RGBD-SLAM motion capture (*.txt) (10=without change of coordinate frame, 11=10+ID), 2=KITTI (*.txt), 3=TORO (*.graph), 4=g2o (*.g2o), 12=JSON (*.json)
 		const std::map<int, Transform> & poses,
 		const std::multimap<int, Link> & constraints = std::multimap<int, Link>(), // required for formats 3 and 4
-		const std::map<int, double> & stamps = std::map<int, double>(),  // required for format 1
+               const std::map<int, double> & stamps = std::map<int, double>(),  // required for formats 1, 10, 11 and 12
 		const ParametersMap & parameters = ParametersMap()); // optional for formats 3 and 4
 
 bool RTABMAP_CORE_EXPORT importPoses(
