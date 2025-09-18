@@ -156,8 +156,13 @@ bool exportPoses(
                                 return false;
                         }
 
-                        std::ofstream fout(tmpPath.c_str());
-                        if(!fout.good())
+                        FILE * fout = 0;
+#ifdef _MSC_VER
+                        fopen_s(&fout, tmpPath.c_str(), "w");
+#else
+                        fout = fopen(tmpPath.c_str(), "w");
+#endif
+                        if(!fout)
                         {
                                 UERROR("Could not open file %s for writing.", tmpPath.c_str());
                                 return false;
@@ -169,8 +174,7 @@ bool exportPoses(
                                 posesList.push_back(*iter);
                         }
 
-                        fout << "{\n  \"cameraPositions\": {";
-                        fout << std::setprecision(6) << std::fixed;
+                        fprintf(fout, "{\n  \"cameraPositions\": {");
 
                         bool firstEntry = true;
                         for(std::list<std::pair<int, Transform> >::const_iterator iter=posesList.begin(); iter!=posesList.end(); ++iter)
@@ -178,25 +182,28 @@ bool exportPoses(
                                 UASSERT(uContains(stamps, iter->first));
                                 if(!firstEntry)
                                 {
-                                        fout << ",";
+                                        fprintf(fout, ",");
                                 }
-                                fout << "\n    \"" << stampToUtcString(stamps.at(iter->first)) << "\": {";
-                                fout << "\"positionX\": " << iter->second.x() << ", ";
-                                fout << "\"positionY\": " << iter->second.y() << ", ";
-                                fout << "\"positionZ\": " << iter->second.z() << "}";
+                                std::string stamp = stampToUtcString(stamps.at(iter->first));
+                                fprintf(fout,
+                                                "\n    \"%s\": {\"positionX\": %.6f, \"positionY\": %.6f, \"positionZ\": %.6f}",
+                                                stamp.c_str(),
+                                                iter->second.x(),
+                                                iter->second.y(),
+                                                iter->second.z());
                                 firstEntry = false;
                         }
 
                         if(firstEntry)
                         {
-                                fout << "}";
+                                fprintf(fout, "}");
                         }
                         else
                         {
-                                fout << "\n  }";
+                                fprintf(fout, "\n  }");
                         }
-                        fout << "\n}\n";
-                        fout.close();
+                        fprintf(fout, "\n}\n");
+                        fclose(fout);
                         return true;
                 }
 
