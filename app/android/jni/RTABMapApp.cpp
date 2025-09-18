@@ -63,6 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/Optimizer.h>
 #include <rtabmap/core/VWDictionary.h>
 #include <rtabmap/core/Memory.h>
+#include <rtabmap/core/Signature.h>
 #include <rtabmap/core/GainCompensator.h>
 #include <rtabmap/core/DBDriver.h>
 #include <rtabmap/core/Recovery.h>
@@ -4428,7 +4429,6 @@ bool RTABMapApp::writeExportedMesh(const std::string & directory, const std::str
                 }
                 for(std::map<int, rtabmap::Transform>::const_iterator iter=stampedPoses.lower_bound(0); iter!=stampedPoses.end(); ++iter)
                 {
-                        cameraPoses.insert(*iter);
                         rtabmap::Transform odomPose, groundTruth;
                         int mapId = 0;
                         int weight = 0;
@@ -4453,14 +4453,27 @@ bool RTABMapApp::writeExportedMesh(const std::string & directory, const std::str
                         {
                                 UWARN("Failed to get node info for pose %d when exporting camera positions.", iter->first);
                         }
+
+                        if(stamp <= 0.0)
+                        {
+                                const rtabmap::Signature * signature = rtabmap_->getMemory()->getSignature(iter->first);
+                                if(signature)
+                                {
+                                        stamp = signature->getStamp();
+                                }
+                        }
+
+                        if(stamp <= 0.0)
+                        {
+                                UWARN("Skipping camera position %d because it has no valid timestamp.", iter->first);
+                                continue;
+                        }
+
+                        cameraPoses.insert(*iter);
                         cameraStamps.insert(std::make_pair(iter->first, stamp));
                 }
 
-                if(cameraStamps.size() != cameraPoses.size())
-                {
-                        UWARN("Skipping camera position export because %d pose stamps were found for %d poses.", (int)cameraStamps.size(), (int)cameraPoses.size());
-                }
-                else if(!cameraPoses.empty())
+                if(!cameraPoses.empty())
                 {
                         std::string jsonPath = directory + UDirectory::separator() + name + ".json";
                         if(rtabmap::graph::exportPoses(jsonPath, 12, cameraPoses, std::multimap<int, rtabmap::Link>(), cameraStamps, rtabmap_->getParameters()))

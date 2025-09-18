@@ -47,6 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 #include <cmath>
 #include <ctime>
+#include <locale>
 
 #include <rtabmap/core/optimizer/OptimizerTORO.h>
 #include <rtabmap/core/optimizer/OptimizerG2O.h>
@@ -156,17 +157,14 @@ bool exportPoses(
                                 return false;
                         }
 
-                        FILE * fout = 0;
-#ifdef _MSC_VER
-                        fopen_s(&fout, tmpPath.c_str(), "w");
-#else
-                        fout = fopen(tmpPath.c_str(), "w");
-#endif
-                        if(!fout)
+                        std::ofstream fout(tmpPath.c_str(), std::ios::out | std::ios::trunc);
+                        if(!fout.is_open())
                         {
                                 UERROR("Could not open file %s for writing.", tmpPath.c_str());
                                 return false;
                         }
+
+                        fout.imbue(std::locale::classic());
 
                         std::list<std::pair<int, Transform> > posesList;
                         for(std::map<int, Transform>::const_iterator iter=poses.lower_bound(0); iter!=poses.end(); ++iter)
@@ -174,37 +172,39 @@ bool exportPoses(
                                 posesList.push_back(*iter);
                         }
 
-                        fprintf(fout, "{\n  \"cameraPositions\": {");
+                        fout << "{\n  \"cameraPositions\": {";
 
-                        bool firstEntry = true;
-                        for(std::list<std::pair<int, Transform> >::const_iterator iter=posesList.begin(); iter!=posesList.end(); ++iter)
+                        if(!posesList.empty())
                         {
-                                UASSERT(uContains(stamps, iter->first));
-                                if(!firstEntry)
+                                fout.setf(std::ios::fixed, std::ios::floatfield);
+                                fout << std::setprecision(6);
+                                bool firstEntry = true;
+                                for(std::list<std::pair<int, Transform> >::const_iterator iter=posesList.begin(); iter!=posesList.end(); ++iter)
                                 {
-                                        fprintf(fout, ",");
+                                        UASSERT(uContains(stamps, iter->first));
+                                        if(!firstEntry)
+                                        {
+                                                fout << ",\n";
+                                        }
+                                        else
+                                        {
+                                                fout << "\n";
+                                                firstEntry = false;
+                                        }
+                                        const std::string stamp = stampToUtcString(stamps.at(iter->first));
+                                        fout << "    \"" << stamp << "\": {\"positionX\": " << iter->second.x()
+                                             << ", \"positionY\": " << iter->second.y()
+                                             << ", \"positionZ\": " << iter->second.z() << "}";
                                 }
-                                std::string stamp = stampToUtcString(stamps.at(iter->first));
-                                fprintf(fout,
-                                                "\n    \"%s\": {\"positionX\": %.6f, \"positionY\": %.6f, \"positionZ\": %.6f}",
-                                                stamp.c_str(),
-                                                iter->second.x(),
-                                                iter->second.y(),
-                                                iter->second.z());
-                                firstEntry = false;
-                        }
-
-                        if(firstEntry)
-                        {
-                                fprintf(fout, "}");
+                                fout << "\n  }\n}\n";
                         }
                         else
                         {
-                                fprintf(fout, "\n  }");
+                                fout << "}\n}\n";
                         }
-                        fprintf(fout, "\n}\n");
-                        fclose(fout);
-                        return true;
+
+                        fout.close();
+                        return fout.good();
                 }
 
                 FILE* fout = 0;
