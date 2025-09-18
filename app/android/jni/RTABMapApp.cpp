@@ -3381,47 +3381,6 @@ bool RTABMapApp::exportMesh(
 
         bool success = false;
 
-        std::map<int, rtabmap::Transform> cameraPoses;
-        std::map<int, double> cameraStamps;
-        if(rtabmap_ && rtabmap_->getMemory())
-        {
-                std::map<int, rtabmap::Transform> poses = rtabmap_->getLocalOptimizedPoses();
-                if(poses.empty())
-                {
-                        std::multimap<int, rtabmap::Link> tmpLinks;
-                        rtabmap_->getGraph(poses, tmpLinks, true, true);
-                }
-                for(std::map<int, rtabmap::Transform>::const_iterator iter=poses.lower_bound(0); iter!=poses.end(); ++iter)
-                {
-                        cameraPoses.insert(*iter);
-                        rtabmap::Transform odomPose, groundTruth;
-                        int mapId = 0;
-                        int weight = 0;
-                        std::string label;
-                        double stamp = 0.0;
-                        std::vector<float> velocity;
-                        rtabmap::GPS gps;
-                        rtabmap::EnvSensors sensors;
-                        bool infoFound = rtabmap_->getMemory()->getNodeInfo(
-                                        iter->first,
-                                        odomPose,
-                                        mapId,
-                                        weight,
-                                        label,
-                                        stamp,
-                                        groundTruth,
-                                        velocity,
-                                        gps,
-                                        sensors,
-                                        true);
-                        if(!infoFound)
-                        {
-                                UWARN("Failed to get node info for pose %d when exporting camera positions.", iter->first);
-                        }
-                        cameraStamps.insert(std::make_pair(iter->first, stamp));
-                }
-        }
-
 	try
 	{
 		int totalSteps = 0;
@@ -4457,13 +4416,51 @@ bool RTABMapApp::writeExportedMesh(const std::string & directory, const std::str
 		}
         }
 
-        if(!cameraPoses.empty())
+        if(success && rtabmap_ && rtabmap_->getMemory())
         {
+                std::map<int, rtabmap::Transform> cameraPoses;
+                std::map<int, double> cameraStamps;
+                std::map<int, rtabmap::Transform> stampedPoses = rtabmap_->getLocalOptimizedPoses();
+                if(stampedPoses.empty())
+                {
+                        std::multimap<int, rtabmap::Link> tmpLinks;
+                        rtabmap_->getGraph(stampedPoses, tmpLinks, true, true);
+                }
+                for(std::map<int, rtabmap::Transform>::const_iterator iter=stampedPoses.lower_bound(0); iter!=stampedPoses.end(); ++iter)
+                {
+                        cameraPoses.insert(*iter);
+                        rtabmap::Transform odomPose, groundTruth;
+                        int mapId = 0;
+                        int weight = 0;
+                        std::string label;
+                        double stamp = 0.0;
+                        std::vector<float> velocity;
+                        rtabmap::GPS gps;
+                        rtabmap::EnvSensors sensors;
+                        bool infoFound = rtabmap_->getMemory()->getNodeInfo(
+                                        iter->first,
+                                        odomPose,
+                                        mapId,
+                                        weight,
+                                        label,
+                                        stamp,
+                                        groundTruth,
+                                        velocity,
+                                        gps,
+                                        sensors,
+                                        true);
+                        if(!infoFound)
+                        {
+                                UWARN("Failed to get node info for pose %d when exporting camera positions.", iter->first);
+                        }
+                        cameraStamps.insert(std::make_pair(iter->first, stamp));
+                }
+
                 if(cameraStamps.size() != cameraPoses.size())
                 {
                         UWARN("Skipping camera position export because %d pose stamps were found for %d poses.", (int)cameraStamps.size(), (int)cameraPoses.size());
                 }
-                else
+                else if(!cameraPoses.empty())
                 {
                         std::string jsonPath = directory + UDirectory::separator() + name + ".json";
                         if(rtabmap::graph::exportPoses(jsonPath, 12, cameraPoses, std::multimap<int, rtabmap::Link>(), cameraStamps, rtabmap_->getParameters()))
