@@ -49,6 +49,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/util3d_filtering.h>
 #include <rtabmap/core/util3d_surface.h>
 #include <rtabmap/core/Graph.h>
+#include <rtabmap/core/Link.h>
 #include <rtabmap/utilite/UEventsManager.h>
 #include <rtabmap/utilite/UStl.h>
 #include <rtabmap/utilite/UDirectory.h>
@@ -62,6 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rtabmap/core/Optimizer.h>
 #include <rtabmap/core/VWDictionary.h>
 #include <rtabmap/core/Memory.h>
+#include <rtabmap/core/Signature.h>
 #include <rtabmap/core/GainCompensator.h>
 #include <rtabmap/core/DBDriver.h>
 #include <rtabmap/core/Recovery.h>
@@ -3378,7 +3380,7 @@ bool RTABMapApp::exportMesh(
 
 	exporting_ = true;
 
-	bool success = false;
+        bool success = false;
 
 	try
 	{
@@ -4413,9 +4415,79 @@ bool RTABMapApp::writeExportedMesh(const std::string & directory, const std::str
 				UERROR("Failed saving obj to %s!", filePath.c_str());
 			}
 		}
-	}
-	exporting_ = false;
-	return success;
+        }
+
+        if(success && rtabmap_ && rtabmap_->getMemory())
+        {
+                std::map<int, rtabmap::Transform> cameraPoses;
+                std::map<int, double> cameraStamps;
+                std::map<int, rtabmap::Transform> stampedPoses = rtabmap_->getLocalOptimizedPoses();
+                if(stampedPoses.empty())
+                {
+                        std::multimap<int, rtabmap::Link> tmpLinks;
+                        rtabmap_->getGraph(stampedPoses, tmpLinks, true, true);
+                }
+                for(std::map<int, rtabmap::Transform>::const_iterator iter=stampedPoses.lower_bound(0); iter!=stampedPoses.end(); ++iter)
+                {
+                        rtabmap::Transform odomPose, groundTruth;
+                        int mapId = 0;
+                        int weight = 0;
+                        std::string label;
+                        double stamp = 0.0;
+                        std::vector<float> velocity;
+                        rtabmap::GPS gps;
+                        rtabmap::EnvSensors sensors;
+                        bool infoFound = rtabmap_->getMemory()->getNodeInfo(
+                                        iter->first,
+                                        odomPose,
+                                        mapId,
+                                        weight,
+                                        label,
+                                        stamp,
+                                        groundTruth,
+                                        velocity,
+                                        gps,
+                                        sensors,
+                                        true);
+                        if(!infoFound)
+                        {
+                                UWARN("Failed to get node info for pose %d when exporting camera positions.", iter->first);
+                        }
+
+                        if(stamp <= 0.0)
+                        {
+                                const rtabmap::Signature * signature = rtabmap_->getMemory()->getSignature(iter->first);
+                                if(signature)
+                                {
+                                        stamp = signature->getStamp();
+                                }
+                        }
+
+                        if(stamp <= 0.0)
+                        {
+                                UWARN("Skipping camera position %d because it has no valid timestamp.", iter->first);
+                                continue;
+                        }
+
+                        cameraPoses.insert(*iter);
+                        cameraStamps.insert(std::make_pair(iter->first, stamp));
+                }
+
+                if(!cameraPoses.empty())
+                {
+                        std::string jsonPath = directory + UDirectory::separator() + name + ".json";
+                        if(rtabmap::graph::exportPoses(jsonPath, 12, cameraPoses, std::multimap<int, rtabmap::Link>(), cameraStamps, rtabmap_->getParameters()))
+                        {
+                                LOGI("Saved camera positions to %s!", jsonPath.c_str());
+                        }
+                        else
+                        {
+                                UERROR("Failed saving camera positions to %s!", jsonPath.c_str());
+                        }
+                }
+        }
+        exporting_ = false;
+        return success;
 }
 
 int RTABMapApp::postProcessing(int approach)
